@@ -1,4 +1,4 @@
-use std::{fs, time::Instant};
+use std::{fs, io::IsTerminal, time::Instant};
 
 use crate::{
     cli::{Cli, Command, PrintersCommand},
@@ -31,7 +31,14 @@ pub fn execute(cli: Cli) -> Result<()> {
 fn execute_printers(command: PrintersCommand) -> Result<()> {
     match command {
         PrintersCommand::List(args) => {
-            let printers = transport::discover_printers()?;
+            let printers = if args.json || !std::io::stderr().is_terminal() {
+                transport::discover_printers()?
+            } else {
+                let mut progress = |message: &str| {
+                    eprintln!("[slipbridge] {message}");
+                };
+                transport::discover_printers_with_progress(&mut progress)?
+            };
             let response = PrintersListResponse {
                 ok: true,
                 command: "printers list".to_owned(),

@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
 use crate::{
@@ -77,11 +79,52 @@ pub fn print_human_printers(printers: &[DiscoveredPrinter]) {
         return;
     }
 
+    let mut by_name: BTreeMap<String, Vec<&DiscoveredPrinter>> = BTreeMap::new();
     for printer in printers {
+        by_name
+            .entry(printer.display_name.clone())
+            .or_default()
+            .push(printer);
+    }
+
+    println!(
+        "Discovered {} endpoint(s) across {} printer(s):",
+        printers.len(),
+        by_name.len()
+    );
+
+    for (idx, (name, mut endpoints)) in by_name.into_iter().enumerate() {
+        endpoints.sort_by(|a, b| a.id.cmp(&b.id));
+
+        println!();
+        println!("{}. {}", idx + 1, name);
+
+        for endpoint in endpoints {
+            println!(
+                "   - {} ({}, {})",
+                endpoint.id,
+                endpoint.transport,
+                describe_source(endpoint.source.as_deref())
+            );
+        }
+    }
+
+    if let Some(first) = printers.first() {
+        println!();
         println!(
-            "{}\t{}\t{}\t{}",
-            printer.id, printer.display_name, printer.transport, printer.address
+            "Use an endpoint id with --printer, e.g. `--printer \"{}\"`.",
+            first.id
         );
+    }
+}
+
+fn describe_source(source: Option<&str>) -> String {
+    match source {
+        Some("_pdl-datastream._tcp.local.") => "Bonjour raw socket".to_owned(),
+        Some("_printer._tcp.local.") => "Bonjour line printer".to_owned(),
+        Some("usb-enumeration") => "USB enumeration".to_owned(),
+        Some(other) => format!("source: {other}"),
+        None => "source unknown".to_owned(),
     }
 }
 

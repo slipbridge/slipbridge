@@ -78,13 +78,23 @@ pub struct SendStats {
 }
 
 pub fn discover_printers() -> Result<Vec<DiscoveredPrinter>> {
+    let mut sink = |_message: &str| {};
+    discover_printers_with_progress(&mut sink)
+}
+
+pub fn discover_printers_with_progress(
+    on_progress: &mut dyn FnMut(&str),
+) -> Result<Vec<DiscoveredPrinter>> {
     let mut printers = Vec::new();
 
+    on_progress("Scanning USB printers");
     if let Ok(mut usb_printers) = discover_usb_printers() {
         printers.append(&mut usb_printers);
     }
 
-    printers.extend(discover_network_printers());
+    on_progress("Scanning network printers via Bonjour (mDNS) and TCP probes");
+    printers.extend(discover_network_printers(on_progress));
+    on_progress("Finalizing printer list");
 
     let mut seen = HashSet::new();
     printers.retain(|printer| seen.insert(printer.id.clone()));
@@ -227,15 +237,24 @@ fn discover_usb_printers() -> Result<Vec<DiscoveredPrinter>> {
     Ok(printers)
 }
 
-fn discover_network_printers() -> Vec<DiscoveredPrinter> {
+fn discover_network_printers(on_progress: &mut dyn FnMut(&str)) -> Vec<DiscoveredPrinter> {
     let mdns = match ServiceDaemon::new() {
         Ok(mdns) => mdns,
-        Err(_) => return Vec::new(),
+        Err(_) => {
+            on_progress("Bonjour (mDNS) unavailable; skipping network browse");
+            return Vec::new();
+        }
     };
 
     let mut by_id = HashMap::<String, DiscoveredPrinter>::new();
 
-    for service_type in ["_pdl-datastream._tcp.local.", "_printer._tcp.local."] {
+    for (service_type, description) in [
+        ("_pdl-datastream._tcp.local.", "raw socket printers"),
+        ("_printer._tcp.local.", "line printer services"),
+    ] {
+        let message = format!("Browsing Bonjour: {description} ({service_type})");
+        on_progress(&message);
+
         for resolved in browse_mdns_services(&mdns, service_type, MDNS_BROWSE_TIMEOUT) {
             for discovered in discovered_from_mdns_service(&resolved) {
                 by_id.entry(discovered.id.clone()).or_insert(discovered);
