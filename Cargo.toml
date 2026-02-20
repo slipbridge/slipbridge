@@ -9,3 +9,10 @@ keywords = ["thermal-printer", "receipt", "cli", "esc-pos", "printing"]
 categories = ["command-line-utilities", "hardware-support"]
 
 [dependencies]
+clap = { version = "4.5.60", features = ["derive"] }
+image = { version = "0.25.9", features = ["default-formats"] }
+mdns-sd = "0.18.0"
+rusb = "0.9.4"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.17"
