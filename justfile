@@ -27,6 +27,9 @@ test:
 install-local:
   cargo install --path . --force
 
+bump-version version:
+  node ./scripts/bump-version.js "{{version}}"
+
 update-install branch="codex/m1-foundation":
   git switch "{{branch}}"
   git pull --ff-only

@@ -35,6 +35,7 @@ just test
 just install-local
 just discover-json
 just smoke
+just bump-version 0.0.2
 ```
 
 Direct `cargo` equivalents:
