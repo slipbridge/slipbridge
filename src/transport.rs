@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     io::Write,
-    net::{TcpStream, ToSocketAddrs},
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
     thread,
     time::{Duration, Instant},
 };
@@ -247,6 +247,7 @@ fn discover_network_printers(on_progress: &mut dyn FnMut(&str)) -> Vec<Discovere
     };
 
     let mut by_id = HashMap::<String, DiscoveredPrinter>::new();
+    let mut probe_9100_cache = HashMap::<String, bool>::new();
 
     for (service_type, description) in [
         ("_pdl-datastream._tcp.local.", "raw socket printers"),
@@ -256,7 +257,7 @@ fn discover_network_printers(on_progress: &mut dyn FnMut(&str)) -> Vec<Discovere
         on_progress(&message);
 
         for resolved in browse_mdns_services(&mdns, service_type, MDNS_BROWSE_TIMEOUT) {
-            for discovered in discovered_from_mdns_service(&resolved) {
+            for discovered in discovered_from_mdns_service(&resolved, &mut probe_9100_cache) {
                 by_id.entry(discovered.id.clone()).or_insert(discovered);
             }
         }
@@ -273,7 +274,7 @@ fn browse_mdns_services(
     mdns: &ServiceDaemon,
     service_type: &str,
     timeout: Duration,
-) -> Vec<Box<ResolvedService>> {
+) -> Vec<ResolvedService> {
     let receiver = match mdns.browse(service_type) {
         Ok(receiver) => receiver,
         Err(_) => return Vec::new(),
@@ -292,7 +293,7 @@ fn browse_mdns_services(
 
         match receiver.recv_timeout(remaining) {
             Ok(ServiceEvent::ServiceResolved(info)) => {
-                resolved.insert(info.get_fullname().to_owned(), info);
+                resolved.insert(info.get_fullname().to_owned(), *info);
             }
             Ok(_) => {}
             Err(_) => break,
@@ -302,7 +303,10 @@ fn browse_mdns_services(
     resolved.into_values().collect()
 }
 
-fn discovered_from_mdns_service(service: &ResolvedService) -> Vec<DiscoveredPrinter> {
+fn discovered_from_mdns_service(
+    service: &ResolvedService,
+    probe_9100_cache: &mut HashMap<String, bool>,
+) -> Vec<DiscoveredPrinter> {
     let host = service.get_hostname().trim_end_matches('.');
     if host.is_empty() {
         return Vec::new();
@@ -322,8 +326,15 @@ fn discovered_from_mdns_service(service: &ResolvedService) -> Vec<DiscoveredPrin
         candidate_ports.insert(service_port);
     }
 
-    if service_port != 9100 && can_connect(host, 9100, PROBE_TIMEOUT) {
-        candidate_ports.insert(9100);
+    if service_port != 9100 {
+        let cache_key = host.to_ascii_lowercase();
+        let has_9100 = *probe_9100_cache
+            .entry(cache_key)
+            .or_insert_with(|| can_connect_service(service, 9100, PROBE_TIMEOUT));
+
+        if has_9100 {
+            candidate_ports.insert(9100);
+        }
     }
 
     candidate_ports
@@ -346,7 +357,23 @@ fn service_instance_name(fullname: &str) -> String {
     fullname.trim_end_matches('.').to_owned()
 }
 
-fn can_connect(host: &str, port: u16, timeout: Duration) -> bool {
+fn can_connect_service(service: &ResolvedService, port: u16, timeout: Duration) -> bool {
+    for address in service.get_addresses() {
+        let socket_addr = SocketAddr::new(address.to_ip_addr(), port);
+        if TcpStream::connect_timeout(&socket_addr, timeout).is_ok() {
+            return true;
+        }
+    }
+
+    let host = service.get_hostname().trim_end_matches('.');
+    if host.is_empty() {
+        return false;
+    }
+
+    can_connect_host(host, port, timeout)
+}
+
+fn can_connect_host(host: &str, port: u16, timeout: Duration) -> bool {
     let addrs = match (host, port).to_socket_addrs() {
         Ok(addrs) => addrs,
         Err(_) => return false,
@@ -387,7 +414,7 @@ fn resolve_discovered_printer(printer: &DiscoveredPrinter) -> Result<ResolvedPri
 }
 
 fn send_tcp_bytes(target: &TcpTarget, bytes: &[u8], chunk_size: usize, retries: u8) -> Result<()> {
-    let mut stream = TcpStream::connect((target.host.as_str(), target.port))?;
+    let mut stream = connect_tcp_with_timeout(&target.host, target.port, NETWORK_TIMEOUT)?;
     stream.set_write_timeout(Some(NETWORK_TIMEOUT))?;
 
     let chunk_size = chunk_size.max(1);
@@ -453,7 +480,6 @@ fn send_usb_bytes(target: &UsbTarget, bytes: &[u8], chunk_size: usize, retries: 
         }
     }
 
-    let _ = session.handle.release_interface(session.interface_number);
     Ok(())
 }
 
@@ -461,6 +487,12 @@ struct UsbSession {
     handle: rusb::DeviceHandle<Context>,
     interface_number: u8,
     out_endpoint: u8,
+}
+
+impl Drop for UsbSession {
+    fn drop(&mut self) {
+        let _ = self.handle.release_interface(self.interface_number);
+    }
 }
 
 fn open_usb_session(target: &UsbTarget) -> Result<UsbSession> {
@@ -663,4 +695,56 @@ fn read_strings<T: UsbContext>(
     let product = handle.read_product_string_ascii(descriptor).ok();
 
     (manufacturer, product)
+}
+
+fn connect_tcp_with_timeout(host: &str, port: u16, timeout: Duration) -> Result<TcpStream> {
+    let addrs = (host, port).to_socket_addrs().map_err(|err| {
+        SlipbridgeError::transport(format!("failed to resolve {host}:{port}: {err}"))
+    })?;
+
+    let mut last_error = None;
+
+    for addr in addrs {
+        match TcpStream::connect_timeout(&addr, timeout) {
+            Ok(stream) => return Ok(stream),
+            Err(err) => last_error = Some(err),
+        }
+    }
+
+    let detail = match last_error {
+        Some(err) => format!(": {err}"),
+        None => String::from(": no socket addresses resolved"),
+    };
+
+    Err(SlipbridgeError::transport(format!(
+        "failed to connect to {host}:{port} within {} ms{detail}",
+        timeout.as_millis()
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_tcp_target, parse_usb_target};
+
+    #[test]
+    fn parses_tcp_target_host_port() {
+        let target = parse_tcp_target("printer.local:9100").expect("target should parse");
+        assert_eq!(target.host, "printer.local");
+        assert_eq!(target.port, 9100);
+    }
+
+    #[test]
+    fn rejects_tcp_target_with_zero_port() {
+        let err = parse_tcp_target("printer.local:0").expect_err("port 0 should fail");
+        assert!(err.to_string().contains("greater than 0"));
+    }
+
+    #[test]
+    fn parses_usb_target_with_bus_and_address() {
+        let target = parse_usb_target("04b8:0e15:1:2").expect("target should parse");
+        assert_eq!(target.vendor_id, 0x04b8);
+        assert_eq!(target.product_id, 0x0e15);
+        assert_eq!(target.bus_number, Some(1));
+        assert_eq!(target.device_address, Some(2));
+    }
 }

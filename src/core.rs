@@ -54,8 +54,7 @@ fn execute_printers(command: PrintersCommand) -> Result<()> {
             Ok(())
         }
         PrintersCommand::Test(args) => {
-            let discovered = transport::discover_printers().unwrap_or_default();
-            let printer = transport::resolve_printer(&args.printer, &discovered)?;
+            let printer = resolve_printer_with_discovery(&args.printer)?;
 
             let payload = build_test_payload();
             let stats = transport::send_bytes(&printer, &payload, 1024, 2)?;
@@ -154,8 +153,7 @@ fn execute_print(args: crate::cli::PrintArgs) -> Result<()> {
         },
     )?;
 
-    let discovered = transport::discover_printers().unwrap_or_default();
-    let printer = transport::resolve_printer(&args.printer, &discovered)?;
+    let printer = resolve_printer_with_discovery(&args.printer)?;
 
     let started = Instant::now();
     let mut total_bytes = 0usize;
@@ -205,4 +203,21 @@ fn build_test_payload() -> Vec<u8> {
     payload.extend_from_slice(&[0x1B, 0x64, 0x03]);
     payload.extend_from_slice(&[0x1D, 0x56, 0x41, 0x00]);
     payload
+}
+
+fn resolve_printer_with_discovery(selector: &str) -> Result<transport::ResolvedPrinter> {
+    match transport::discover_printers() {
+        Ok(discovered) => transport::resolve_printer(selector, &discovered),
+        Err(err) => {
+            // Explicit selectors do not require discovery and can still proceed.
+            if let Ok(printer) = transport::resolve_printer(selector, &[]) {
+                return Ok(printer);
+            }
+
+            Err(SlipbridgeError::transport(format!(
+                "printer discovery failed while resolving '{}': {err}",
+                selector
+            )))
+        }
+    }
 }

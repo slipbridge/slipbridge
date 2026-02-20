@@ -97,8 +97,8 @@ pub fn run_doctor() -> Result<DoctorReport> {
 
     checks.push(DoctorCheck {
         name: "transport_tcp".to_owned(),
-        status: CheckStatus::Pass,
-        detail: "tcp transport support compiled in".to_owned(),
+        status: CheckStatus::Warn,
+        detail: "tcp transport support compiled in (connectivity not tested)".to_owned(),
     });
 
     Ok(DoctorReport { checks })

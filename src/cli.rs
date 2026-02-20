@@ -42,7 +42,7 @@ pub struct PrintArgs {
     #[arg(long = "type", value_enum)]
     pub input_type: Option<InputTypeArg>,
 
-    /// Explicitly request cutting at the end of the print.
+    /// Explicitly request cutting at the end of the print (default behavior).
     #[arg(long, action = ArgAction::SetTrue, conflicts_with = "no_cut")]
     pub cut: bool,
 
@@ -125,4 +125,37 @@ pub enum InputTypeArg {
     Image,
     Markdown,
     Text,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{PaperArg, PrintArgs};
+
+    fn base_print_args() -> PrintArgs {
+        PrintArgs {
+            input: PathBuf::from("sample.txt"),
+            printer: "tcp://printer.local:9100".to_owned(),
+            paper: PaperArg::Mm80,
+            input_type: None,
+            cut: false,
+            no_cut: false,
+            copies: 1,
+            json: false,
+        }
+    }
+
+    #[test]
+    fn cut_is_enabled_by_default() {
+        let args = base_print_args();
+        assert!(args.cut_enabled());
+    }
+
+    #[test]
+    fn no_cut_overrides_default_cut_behavior() {
+        let mut args = base_print_args();
+        args.no_cut = true;
+        assert!(!args.cut_enabled());
+    }
 }

@@ -43,6 +43,13 @@ pub fn build_raster_print_job(
         SlipbridgeError::invalid_argument("image row is too wide for ESC/POS raster mode")
     })?;
 
+    if options.max_payload_bytes < bytes_per_row {
+        return Err(SlipbridgeError::invalid_argument(format!(
+            "max payload bytes ({}) is smaller than one raster row ({bytes_per_row})",
+            options.max_payload_bytes
+        )));
+    }
+
     let rows_by_payload = options.max_payload_bytes / bytes_per_row;
     let max_rows = rows_by_payload
         .max(1)
@@ -134,5 +141,27 @@ mod tests {
         // 720 / 72 = 10 rows per chunk -> 12 chunks for 120 rows.
         assert_eq!(job.chunk_count, 12);
         assert!(job.rows_per_chunk.iter().all(|rows| *rows <= 10));
+    }
+
+    #[test]
+    fn errors_when_payload_limit_cannot_fit_single_row() {
+        let rendered = RenderedImage {
+            width_px: 576,
+            height_px: 1,
+            bytes_per_row: 72,
+            raster_data: vec![0x00; 72],
+        };
+
+        let err = build_raster_print_job(
+            &rendered,
+            RasterOptions {
+                max_payload_bytes: 64,
+                max_rows_per_command: 255,
+                cut: true,
+            },
+        )
+        .expect_err("expected payload size validation error");
+
+        assert!(err.to_string().contains("smaller than one raster row"));
     }
 }

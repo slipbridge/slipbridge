@@ -129,9 +129,15 @@ fn describe_source(source: Option<&str>) -> String {
 }
 
 pub fn print_human_print(result: &PrintResponse) {
+    let unit = if result.output.copies == 1 {
+        "copy"
+    } else {
+        "copies"
+    };
+
     println!(
-        "Printed {} copy/copies to {}.",
-        result.output.copies, result.printer.id
+        "Printed {} {} to {}.",
+        result.output.copies, unit, result.printer.id
     );
     println!(
         "Bytes sent: {} ({} ms, {} raster chunks, max {} rows/chunk)",
