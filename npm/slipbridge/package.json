@@ -1,0 +1,27 @@
+{
+  "name": "slipbridge",
+  "version": "0.0.1",
+  "description": "An agent-first CLI interface for thermal receipt printers",
+  "license": "MIT OR Apache-2.0",
+  "bin": {
+    "slipbridge": "bin/run.js"
+  },
+  "keywords": [
+    "thermal-printer",
+    "receipt",
+    "cli",
+    "esc-pos",
+    "printing"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "optionalDependencies": {
+    "@slipbridge/cli-darwin-arm64": "0.0.1",
+    "@slipbridge/cli-darwin-x64": "0.0.1",
+    "@slipbridge/cli-linux-x64-gnu": "0.0.1",
+    "@slipbridge/cli-linux-arm64-gnu": "0.0.1",
+    "@slipbridge/cli-win32-x64": "0.0.1"
+  }
+}

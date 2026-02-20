@@ -1,0 +1,11 @@
+[package]
+name = "slipbridge"
+version = "0.0.1"
+edition = "2024"
+description = "An agent-first CLI interface for thermal receipt printers"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["thermal-printer", "receipt", "cli", "esc-pos", "printing"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[dependencies]

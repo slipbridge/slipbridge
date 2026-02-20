@@ -1,0 +1,9 @@
+{
+  "name": "@slipbridge/cli-linux-arm64-gnu",
+  "version": "0.0.1",
+  "description": "Slipbridge binary for Linux ARM64 (glibc)",
+  "license": "MIT OR Apache-2.0",
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "files": ["slipbridge"]
+}

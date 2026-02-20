@@ -1,0 +1,9 @@
+{
+  "name": "@slipbridge/cli-darwin-arm64",
+  "version": "0.0.1",
+  "description": "Slipbridge binary for macOS ARM64 (Apple Silicon)",
+  "license": "MIT OR Apache-2.0",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["slipbridge"]
+}

@@ -1,0 +1,20 @@
+# Rust / Cargo
+/target
+debug/
+**/*.rs.bk
+*.pdb
+
+# Node / npm
+node_modules/
+*.log
+*.tgz
+
+# Built binaries for npm distribution
+npm/@slipbridge/*/slipbridge
+npm/@slipbridge/*/slipbridge.exe
+
+# macOS
+.DS_Store
+
+# Project
+.notes/

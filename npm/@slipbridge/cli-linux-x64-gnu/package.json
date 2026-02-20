@@ -1,0 +1,9 @@
+{
+  "name": "@slipbridge/cli-linux-x64-gnu",
+  "version": "0.0.1",
+  "description": "Slipbridge binary for Linux x64 (glibc)",
+  "license": "MIT OR Apache-2.0",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["slipbridge"]
+}
